@@ -11,5 +11,7 @@ The rules the page keeps, each tested in `test.mjs`:
 - One failed check opens nothing. Two in a row open an incident, and two working checks in a row close it.
 - If the checks go quiet, the top line says so instead of showing old states as current.
 - Parts are named in customer words only.
+- The page wears the site's own look (`src/brand.mjs` says where each value came from) and carries it with it: the fonts sit in `brand/fonts` with their licences, so nothing is loaded from the site when the page is opened.
+- The page is built when the checks run, so it asks again how old the last check is when someone opens it.
 
 Run the tests with `node test.mjs` (Node 20, no dependencies).

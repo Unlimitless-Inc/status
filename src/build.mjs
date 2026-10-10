@@ -9,10 +9,11 @@
 // vendor or stack name appears.
 //
 // Usage: STATUS_BANNED_WORDS=<a,b,c> node src/build.mjs <data-dir> <out-dir> [--now <iso>]
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { COMPONENTS, STATES, headline, dayBars, uptime, deriveIncidents, bannedOnPage } from "./lib.mjs";
+import { COMPONENTS, STATES, headline, dayBars, checksSoFar, uptime, deriveIncidents, bannedOnPage } from "./lib.mjs";
+import { BRAND_CSS, MARK_DEFS, lockup, FOOTER_COLUMNS } from "./brand.mjs";
 
 const [, , dataDir, outDir, flag, nowArg] = process.argv;
 if (!dataDir || !outDir) { console.error("usage: build.mjs <data-dir> <out-dir> [--now <iso>]"); process.exit(2); }
@@ -35,7 +36,7 @@ const since = records[0]?.at.slice(0, 10) ?? null;
 
 const parts = COMPONENTS.map((c) => {
   const bars = dayBars(records, c.key, today);
-  return { key: c.key, name: c.name, state: last?.components?.[c.key] ?? null, bars, uptime: uptime(bars) };
+  return { key: c.key, name: c.name, state: last?.components?.[c.key] ?? null, bars, sofar: checksSoFar(bars) };
 });
 const top = headline(parts.map((p) => p.state ?? "operational"), stale || parts.some((p) => !p.state));
 const incidents = [...deriveIncidents(records), ...past].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
@@ -70,49 +71,62 @@ const html = `<!doctype html>
 <title>Unl status</title>
 <meta name="description" content="Whether Unl is working right now, the last 90 days of each part, and every incident.">
 <link rel="alternate" type="application/atom+xml" title="Unl status updates" href="feed.xml">
-<style>
-:root{--ink:#1A1B26;--panel:#24283B;--line:rgba(192,202,245,.12);--text:#E8EAED;--muted:#9AA3AD;--ok:#4FD1A1;--slow:#E0B341;--part:#E8894A;--down:#E5606B;--none:#3A3F55;--acc:#7DCFFF}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--ink);color:var(--text);font:400 16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
-.wrap{max-width:860px;margin:0 auto;padding:0 16px}
-header{display:flex;justify-content:space-between;align-items:center;padding:24px 0}
-.brand{font-weight:700;font-size:20px;color:var(--text);text-decoration:none}.brand span{color:var(--acc)}
-header a.sub{color:var(--muted);font-size:14px}
-.top{border-radius:12px;padding:18px 20px;font-weight:600;font-size:18px;margin:8px 0 28px}
-.top.operational{background:rgba(79,209,161,.14);color:var(--ok)}.top.degraded{background:rgba(224,179,65,.14);color:var(--slow)}
-.top.partial{background:rgba(232,137,74,.16);color:var(--part)}.top.major{background:rgba(229,96,107,.16);color:var(--down)}
-.top.unknown{background:var(--panel);color:var(--muted)}
-.parts{border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.part{padding:16px 20px;border-top:1px solid var(--line)}.part:first-child{border-top:0}
-.part-h{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}.part-h b{font-weight:600}
-.st{font-size:14px}.st.operational{color:var(--ok)}.st.degraded{color:var(--slow)}.st.partial{color:var(--part)}.st.major{color:var(--down)}.st.none{color:var(--muted)}
+<style>${BRAND_CSS}
+.wrap{max-width:880px;margin:0 auto;padding:0 16px}
+header.top-bar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:26px 0 30px}
+.page-tag{font:400 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+h1{font:600 clamp(28px,5vw,40px)/1.15 var(--disp);letter-spacing:-.015em;color:var(--white);margin:0 0 18px}
+.top{border-radius:var(--radius);border:1px solid var(--line);padding:16px 20px;font:600 18px/1.4 var(--disp);margin:0 0 26px;display:flex;align-items:center;gap:12px}
+.top::before{content:'';flex:none;width:10px;height:10px;border-radius:50%;background:currentColor;box-shadow:0 0 12px currentColor}
+.top.operational{background:var(--ok-soft);color:var(--ok)}.top.degraded{background:var(--slow-soft);color:var(--slow)}
+.top.partial,.top.major{background:var(--down-soft);color:var(--down)}.top.unknown{background:var(--panel);color:var(--muted)}
+.parts{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:rgba(36,40,59,.55)}
+.part{padding:18px 20px;border-top:1px solid var(--line)}.part:first-child{border-top:0}
+.part-h{display:flex;justify-content:space-between;gap:12px;margin-bottom:12px}.part-h b{font:600 16px/1.4 var(--disp);color:var(--white)}
+.st{font:400 12.5px/1.6 var(--mono);letter-spacing:.02em}.st.operational{color:var(--ok)}.st.degraded{color:var(--slow)}.st.partial,.st.major{color:var(--down)}.st.none{color:var(--muted)}
 .bars{width:100%;height:34px;display:block}
-.b-operational{fill:var(--ok)}.b-degraded{fill:var(--slow)}.b-partial{fill:var(--part)}.b-major{fill:var(--down)}.b-maintenance{fill:var(--acc)}.b-none{fill:var(--none)}
-.part-f{display:flex;justify-content:space-between;color:var(--muted);font-size:12.5px;margin-top:6px}
-.note{color:var(--muted);font-size:14px;margin:12px 0 0}
-h2{font-size:20px;margin:40px 0 14px}
-.day{border-top:1px solid var(--line);padding:16px 0}.day>h3{font-size:15px;color:var(--muted);font-weight:500;margin-bottom:8px}
+.b-operational{fill:var(--ok)}.b-degraded{fill:var(--slow)}.b-partial,.b-major{fill:var(--down)}.b-maintenance{fill:var(--unl-cyan)}.b-none{fill:var(--none)}
+.part-f{display:flex;justify-content:space-between;gap:10px;color:var(--dim);font:400 11.5px/1.5 var(--mono);margin-top:8px}
+.part-f span:nth-child(2){text-align:center}
+.note{color:var(--muted);font-size:14px;margin:14px 0 0}
+h2{font:600 22px/1.3 var(--disp);color:var(--white);letter-spacing:-.01em;margin:46px 0 14px}
+.day{border-top:1px solid var(--line);padding:18px 0}.day>h3{font:400 12px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:10px}
 .day .none{color:var(--muted);font-size:14px}
-.inc{margin:10px 0 0}.inc h3{font-size:16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.inc-part{color:var(--muted);font-size:13px;margin:2px 0 8px}
-.inc ol{list-style:none;border-left:2px solid var(--line);padding-left:14px;display:grid;gap:10px}
-.inc time{color:var(--muted);font-size:13px}.inc li p{margin-top:2px}
-.pill{font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px}
-.s-resolved{background:rgba(79,209,161,.14);color:var(--ok)}.s-major{background:rgba(229,96,107,.16);color:var(--down)}.s-partial{background:rgba(232,137,74,.16);color:var(--part)}.s-degraded{background:rgba(224,179,65,.14);color:var(--slow)}
-footer{color:var(--muted);font-size:13px;padding:40px 0;display:flex;flex-wrap:wrap;gap:8px 18px}
-footer a,.note a{color:var(--text)}
+.inc{margin:10px 0 0;border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;background:rgba(36,40,59,.45)}
+.inc h3{font:600 16px/1.4 var(--disp);color:var(--white);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.inc-part{color:var(--dim);font:400 12px/1.5 var(--mono);margin:4px 0 12px}
+.inc ol{list-style:none;border-left:2px solid var(--line2);padding-left:14px;display:grid;gap:12px}
+.inc time{color:var(--dim);font:400 12px/1.5 var(--mono)}.inc li p{margin-top:2px;color:var(--txt)}
+.pill{font:700 11px/1 var(--mono);letter-spacing:.04em;border-radius:999px;padding:5px 10px}
+.s-resolved{background:var(--ok-soft);color:var(--ok)}.s-major,.s-partial{background:var(--down-soft);color:var(--down)}.s-degraded{background:var(--slow-soft);color:var(--slow)}
+footer{border-top:1px solid var(--line);margin-top:56px;padding:34px 0 40px}
+.foot{display:grid;grid-template-columns:minmax(190px,1fr) 3fr;gap:32px 40px;font-size:13.5px;color:var(--dim)}
+.foot .brand{font-size:20px}.foot .brand-caption{font-size:11px}
+.foot-cols{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px}
+.foot-h{font:400 11.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+.foot ul{list-style:none;display:flex;flex-direction:column;gap:10px}
+.foot a{text-decoration:none}.foot a:hover{color:var(--text)}
+.foot-base{grid-column:1/-1;border-top:1px solid var(--line);padding-top:20px;font-size:12.5px}
+@media(max-width:700px){.foot{grid-template-columns:1fr}.foot-cols{grid-template-columns:repeat(2,minmax(0,1fr))}.part-f span:first-child,.part-f span:last-child{display:none}.part-f{justify-content:center}}
 </style></head>
-<body><div class="wrap">
-<header><a class="brand" href="https://unlimitless.ai/"><span>Unl</span> status</a><a class="sub" href="feed.xml">Get updates</a></header>
-<div class="top ${top.tone}" role="status">${esc(top.text)}</div>
+<body>${MARK_DEFS}<div class="wrap">
+<header class="top-bar">${lockup()}<span class="page-tag">Status</span></header>
+<h1>Unl status</h1>
+<div class="top ${top.tone}" role="status" id="top"${last ? ` data-last="${esc(last.at)}"` : ""}>${esc(top.text)}</div>
+<script>
+// The page is built when the checks run, so "how old is the last check" is asked again when it is opened. If the
+// checks have gone quiet since, the top line says so instead of showing an old state as current.
+(function(){var t=document.getElementById("top"),l=t&&t.getAttribute("data-last");if(!l)return;if(Date.now()-Date.parse(l)>${STALE_MS}){t.className="top unknown";t.textContent=${JSON.stringify(headline([], true).text)};}})();
+</script>
 <section class="parts" aria-label="Parts of Unl">
-${parts.map((p) => `<div class="part"><div class="part-h"><b>${esc(p.name)}</b><span class="st ${p.state ?? "none"}">${p.state ? esc(STATES[p.state].label) : "Not yet checked"}</span></div>${barSvg(p.bars)}<div class="part-f"><span>90 days ago</span><span>${p.uptime === null ? "No checks yet" : `${p.uptime}% of checks found it working`}</span><span>Today</span></div></div>`).join("\n")}
+${parts.map((p) => `<div class="part"><div class="part-h"><b>${esc(p.name)}</b><span class="st ${p.state ?? "none"}">${p.state ? esc(STATES[p.state].label) : "Not yet checked"}</span></div>${barSvg(p.bars)}<div class="part-f"><span>90 days ago</span><span>${p.sofar.checks === 0 ? "No checks yet" : p.sofar.bad === 0 ? `${p.sofar.checks} checks so far, every one found it working` : `${p.sofar.checks} checks so far, ${p.sofar.bad} found a problem`}</span><span>Today</span></div></div>`).join("\n")}
 </section>
 <p class="note">${since ? `Our checks began on ${esc(longDate(since))}. Days before that have no bars, because nothing was checked then.` : "Our checks have not started yet, so no days are drawn."} ${last ? `Last checked ${esc(longDate(last.at))}, ${esc(hhmm(last.at))} UTC.` : ""}</p>
 <h2>Past incidents</h2>
 ${byDay.size ? [...byDay.entries()].map(([d, list]) => `<section class="day"><h3>${esc(longDate(d))}</h3>${list.map(incidentHtml).join("")}</section>`).join("\n") : `<section class="day"><p class="none">No incidents.</p></section>`}
-<footer><span>&copy; 2026 Unlimitless</span><a href="https://unlimitless.ai/support">Support</a><a href="status.json">status.json</a><a href="feed.xml">Updates feed</a></footer>
-</div></body></html>
+</div>
+<footer><div class="wrap foot"><div>${lockup(30)}</div><div class="foot-cols">${FOOTER_COLUMNS.map((c) => `<div><p class="foot-h">${esc(c.h)}</p><ul>${c.links.map(([href, text]) => `<li><a href="${esc(href)}">${esc(text)}</a></li>`).join("")}</ul></div>`).join("")}</div><div class="foot-base">&copy; 2026 Unlimitless</div></div></footer>
+</body></html>
 `;
 
 const json = {
@@ -121,7 +135,7 @@ const json = {
   monitoring_since: since,
   stale,
   status: { tone: top.tone, text: top.text },
-  parts: parts.map((p) => ({ key: p.key, name: p.name, state: p.state, uptime_90d: p.uptime })),
+  parts: parts.map((p) => ({ key: p.key, name: p.name, state: p.state, checks_90d: p.sofar.checks, problems_90d: p.sofar.bad, uptime_90d: uptime(p.bars) })),
   incidents: incidents.map((i) => ({ part: i.component, title: i.title, started_at: i.startedAt, resolved_at: i.resolvedAt, updates: i.updates })),
 };
 
@@ -141,4 +155,7 @@ mkdirSync(outDir, { recursive: true });
 writeFileSync(join(outDir, "index.html"), html);
 writeFileSync(join(outDir, "status.json"), JSON.stringify(json, null, 2) + "\n");
 writeFileSync(join(outDir, "feed.xml"), feed);
+// The faces travel with the page: nothing is fetched from the site, or a font host, when the page is opened.
+mkdirSync(join(outDir, "fonts"), { recursive: true });
+for (const f of readdirSync(join(ROOT, "brand", "fonts"))) copyFileSync(join(ROOT, "brand", "fonts", f), join(outDir, "fonts", f));
 console.log(`built: ${top.text}; ${records.length} check(s) since ${since ?? "never"}; ${incidents.length} incident(s)`);

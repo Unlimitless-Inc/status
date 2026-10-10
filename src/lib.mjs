@@ -125,6 +125,12 @@ export function uptime(bars) {
   return Math.floor((ok / n) * 10000) / 100;
 }
 
+/** How many checks the bars hold and how many found a problem. The page says this rather than a percentage: on the
+ *  first day "100%" beside eighty-nine empty days reads as a claim about days nobody checked. */
+export function checksSoFar(bars) {
+  return bars.reduce((a, b) => ({ checks: a.checks + b.checks, bad: a.bad + b.bad }), { checks: 0, bad: 0 });
+}
+
 /**
  * Incidents derived from the checks, never written by hand: a part that is not working on TWO checks in a row
  * opens one; it is resolved after two working checks in a row. A single blip opens nothing.
@@ -151,7 +157,7 @@ export function deriveIncidents(records, components = COMPONENTS) {
       if (!open && run.length >= 2) {
         open = {
           component: c.key,
-          title: `${c.name}: ${STATES[s].label.toLowerCase()}`,
+          title: `${c.name}, ${STATES[s].label.toLowerCase()}`,
           startedAt: run[0].at,
           resolvedAt: null,
           worst: s,

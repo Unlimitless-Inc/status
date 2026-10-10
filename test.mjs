@@ -8,7 +8,7 @@
 //
 // Pure: no network. It builds the page from planted records into a temp dir.
 import { execFileSync } from "child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -90,8 +90,20 @@ execFileSync("node", [join(HERE, "src", "build.mjs"), dir, out, "--now", "2026-1
 const page = readFileSync(join(out, "index.html"), "utf8");
 const json = JSON.parse(readFileSync(join(out, "status.json"), "utf8"));
 check("the top line says a part is down", /Some parts are down/.test(page) && json.status.tone === "major");
-check("the open incident is on the page and in the feed", /Unl answering your AI: down/.test(page) && /Unl answering your AI: down/.test(readFileSync(join(out, "feed.xml"), "utf8")));
+check("the open incident is on the page and in the feed", /Unl answering your AI, down/.test(page) && /Unl answering your AI, down/.test(readFileSync(join(out, "feed.xml"), "utf8")));
 check("the page says when checks began", /Our checks began on 9 October 2026/.test(page));
+
+console.log("\n── the page wears the site's look and carries it with it ──");
+check("the lockup is in the header and footer: icon, wordmark, caption", (page.match(/<use href="#mark"\/>/g) ?? []).length === 2 && /class="rest">imitless</.test(page) && /your why agent/.test(page));
+check("RED: nothing is loaded from another host when the page opens", !/<link[^>]+stylesheet|<script[^>]+src=|url\(\s*["']?https?:|<img[^>]+src="https?:/i.test(page) && !/fonts\.(googleapis|gstatic)/.test(page));
+check("the faces ship beside the page", ["space-grotesk.woff2", "instrument-sans.woff2", "space-mono-400.woff2", "space-mono-700.woff2"].every((f) => existsSync(join(out, "fonts", f))));
+const prose = page.replace(/<style>[\s\S]*?<\/style>/, "").replace(/<script>[\s\S]*?<\/script>/g, "").replace(/<svg[\s\S]*?<\/svg>/g, "").replace(/<[^>]+>/g, " ").replace(/\b\d{2}:\d{2}\b/g, "");
+check("RED: no colon or em dash in what a reader reads", !/[:—]/.test(prose), (prose.match(/.{0,30}[:—].{0,30}/) ?? [""])[0]);
+check("checks are counted, not turned into a percentage of days nobody checked", /3 checks so far, 2 found a problem/.test(page) && /3 checks so far, every one found it working/.test(page) && !/% of checks/.test(page));
+check("'Get updates' does not point at a raw feed from the header", !/Get updates/.test(page) && /href="feed\.xml">Updates feed</.test(page));
+
+check("the page re-asks how old the last check is when it is opened, with the same window", /data-last="2026-10-09T10:20:00Z"/.test(page) && /Date\.now\(\)-Date\.parse\(l\)>2700000/.test(page) && /not reported recently/.test(page));
+
 execFileSync("node", [join(HERE, "src", "build.mjs"), dir, out, "--now", "2026-10-09T12:00:00Z"]);
 check("RED: an hour and a half of silence turns the top line to 'not reported recently'", JSON.parse(readFileSync(join(out, "status.json"), "utf8")).stale === true);
 
