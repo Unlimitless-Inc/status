@@ -1,0 +1,93 @@
+# status — status.unlimitless.ai, checked and published from OUTSIDE the infrastructure it reports on.
+#
+# WHY HERE. The status page must stay up when Unl is down, so neither its checks nor its host can live on the
+# service it reports. The checks run on GitHub's hosted runners; the page is static and served by Pages; the
+# history is a file on the `status-data` branch.
+#
+# TWO SWITCHES, both repository variables, both grey when off (a skipped job shows "did not run", never a green
+# tick for a check that never happened):
+#   STATUS_PAGE_ARMED = true    runs the checks every ten minutes and keeps the honest history.
+#   STATUS_PAGE_PUBLISH = true  publishes the page to Pages.
+# A manual run always runs the checks.
+name: status
+
+on:
+  schedule:
+    - cron: "7,17,27,37,47,57 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: status
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: node test.mjs
+
+  check:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && vars.STATUS_PAGE_ARMED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Fetch the history
+        run: |
+          git fetch origin status-data:status-data 2>/dev/null || true
+          if git rev-parse --verify -q status-data >/dev/null; then
+            git worktree add status-data status-data
+          else
+            git worktree add --orphan -b status-data status-data
+          fi
+      - name: Check every part
+        run: node src/probe.mjs status-data
+      - name: Keep 100 days of history
+        run: |
+          node -e '
+            const fs=require("fs"),f="status-data/checks.jsonl",cut=new Date(Date.now()-100*864e5).toISOString();
+            const lines=fs.readFileSync(f,"utf8").split("\n").filter(Boolean).filter(l=>JSON.parse(l).at>=cut);
+            fs.writeFileSync(f,lines.join("\n")+"\n");'
+      - name: Save the history
+        # A push race with an overlapping run is retried on the next run rather than failing the check.
+        continue-on-error: true
+        working-directory: status-data
+        run: |
+          git config user.name "unl-status"
+          git config user.email "status@unlimitless.ai"
+          git add checks.jsonl
+          git commit -qm "status check $(date -u +%FT%TZ)"
+          git push -q origin HEAD:status-data
+      - name: Build the page
+        env:
+          STATUS_BANNED_WORDS: ${{ secrets.STATUS_BANNED_WORDS }}
+        run: node src/build.mjs status-data site
+      - if: vars.STATUS_PAGE_PUBLISH == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  publish:
+    needs: check
+    if: vars.STATUS_PAGE_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

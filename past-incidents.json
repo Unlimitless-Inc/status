@@ -1,0 +1,18 @@
+{
+  "_why": "Incidents from before our checks began, told from our own record so the history is honest. Each one names its source. Nothing here draws a day on the uptime bars: those start the day monitoring began.",
+  "incidents": [
+    {
+      "component": "answering",
+      "title": "Unl stopped answering connected AIs",
+      "startedAt": "2026-09-26T15:41:00Z",
+      "resolvedAt": "2026-09-26T19:53:00Z",
+      "worst": "major",
+      "source": "our incident record: refusals began 15:41 UTC and were reversed by about 19:45 UTC; the fix that blocks the cause went live at 19:53 UTC",
+      "updates": [
+        { "at": "2026-09-26T15:41:00Z", "text": "A change to who may use Unl was made by mistake. From this point, requests from connected AIs were refused." },
+        { "at": "2026-09-26T19:45:00Z", "text": "We found the cause and reversed it. Requests are being answered again." },
+        { "at": "2026-09-26T19:53:00Z", "text": "Fixed. A change that blocks the way this mistake was made is live." }
+      ]
+    }
+  ]
+}
