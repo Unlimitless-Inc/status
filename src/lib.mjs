@@ -172,7 +172,7 @@ export const clock = (iso) => iso.slice(11, 16);
 /**
  * Words that must never reach the public page: vendors, stack and internal names. The list itself is not kept in
  * this public repository, because naming every word to keep off the page would publish them here instead. It
- * arrives as a comma-separated list in STATUS_BANNED_WORDS, and a build without it refuses to run (bannedOnPage).
+ * arrives as a comma-separated list in the STATUS_BANNED_WORDS repository variable, and a build without it refuses to run (bannedOnPage).
  */
 export function bannedOnPage(list = process.env.STATUS_BANNED_WORDS) {
   const words = String(list ?? "").split(",").map((w) => w.trim()).filter(Boolean);

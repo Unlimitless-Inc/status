@@ -14,7 +14,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { COMPONENTS, judgeCheck, componentState, dayBars, uptime, deriveIncidents, headline, bannedOnPage } from "./src/lib.mjs";
 
-// Planted words for the test only: the real list is a repository secret and never lives in this public code.
+// Planted words for the test only: the real list is a repository variable and never lives in this public code.
 process.env.STATUS_BANNED_WORDS = "acmehost,widgetdb,internal engine";
 const BANNED_ON_PAGE = bannedOnPage();
 
