@@ -71,7 +71,7 @@ jobs:
           git push -q origin HEAD:status-data
       - name: Build the page
         env:
-          STATUS_BANNED_WORDS: ${{ secrets.STATUS_BANNED_WORDS }}
+          STATUS_BANNED_WORDS: ${{ vars.STATUS_BANNED_WORDS }}
         run: node src/build.mjs status-data site
       - if: vars.STATUS_PAGE_PUBLISH == 'true'
         uses: actions/upload-pages-artifact@v3
