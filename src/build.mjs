@@ -75,7 +75,8 @@ const html = `<!doctype html>
 .wrap{max-width:880px;margin:0 auto;padding:0 16px}
 header.top-bar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:26px 0 30px}
 .page-tag{font:400 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
-h1{font:600 clamp(28px,5vw,40px)/1.15 var(--disp);letter-spacing:-.015em;color:var(--white);margin:0 0 18px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.told{margin:14px 0 0;color:var(--muted);font-size:14px}.told a{color:var(--unl-cyan)}
 .top{border-radius:var(--radius);border:1px solid var(--line);padding:16px 20px;font:600 18px/1.4 var(--disp);margin:0 0 26px;display:flex;align-items:center;gap:12px}
 .top::before{content:'';flex:none;width:10px;height:10px;border-radius:50%;background:currentColor;box-shadow:0 0 12px currentColor}
 .top.operational{background:var(--ok-soft);color:var(--ok)}.top.degraded{background:var(--slow-soft);color:var(--slow)}
@@ -111,7 +112,7 @@ footer{border-top:1px solid var(--line);margin-top:56px;padding:34px 0 40px}
 </style></head>
 <body>${MARK_DEFS}<div class="wrap">
 <header class="top-bar">${lockup()}<span class="page-tag">Status</span></header>
-<h1>Unl status</h1>
+<h1 class="sr">Unl status</h1>
 <div class="top ${top.tone}" role="status" id="top"${last ? ` data-last="${esc(last.at)}"` : ""}>${esc(top.text)}</div>
 <script>
 // The page is built when the checks run, so "how old is the last check" is asked again when it is opened. If the
@@ -122,6 +123,7 @@ footer{border-top:1px solid var(--line);margin-top:56px;padding:34px 0 40px}
 ${parts.map((p) => `<div class="part"><div class="part-h"><b>${esc(p.name)}</b><span class="st ${p.state ?? "none"}">${p.state ? esc(STATES[p.state].label) : "Not yet checked"}</span></div>${barSvg(p.bars)}<div class="part-f"><span>90 days ago</span><span>${p.sofar.checks === 0 ? "No checks yet" : p.sofar.bad === 0 ? `${p.sofar.checks} checks so far, every one found it working` : `${p.sofar.checks} checks so far, ${p.sofar.bad} found a problem`}</span><span>Today</span></div></div>`).join("\n")}
 </section>
 <p class="note">${since ? `Our checks began on ${esc(longDate(since))}. Days before that have no bars, because nothing was checked then.` : "Our checks have not started yet, so no days are drawn."} ${last ? `Last checked ${esc(longDate(last.at))}, ${esc(hhmm(last.at))} UTC.` : ""}</p>
+<p class="told" id="told">To be told when a part stops working and when it recovers, follow the <a href="feed.xml">updates feed</a> in any feed reader. Agents can read the same truth from <a href="status.json">status.json</a>.</p>
 <h2>Past incidents</h2>
 ${byDay.size ? [...byDay.entries()].map(([d, list]) => `<section class="day"><h3>${esc(longDate(d))}</h3>${list.map(incidentHtml).join("")}</section>`).join("\n") : `<section class="day"><p class="none">No incidents.</p></section>`}
 </div>
