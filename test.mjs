@@ -109,5 +109,31 @@ check("the page re-asks how old the last check is when it is opened, with the sa
 execFileSync("node", [join(HERE, "src", "build.mjs"), dir, out, "--now", "2026-10-09T12:00:00Z"]);
 check("RED: an hour and a half of silence turns the top line to 'not reported recently'", JSON.parse(readFileSync(join(out, "status.json"), "utf8")).stale === true);
 
+console.log("\n── the subscribe box and the tab icon (Unl brief fb0c0106) ──");
+check("the subscribe box posts to Unl's confirm-by-email door, and works as a plain form", /<form class="sub" id="sub" action="https:\/\/api\.unlimitless\.ai\/public\/status\/subscribe" method="post">/.test(page) && /name="email" type="email" required/.test(page));
+check("the page says every email can be stopped", /Every email has a link to stop them/.test(page));
+check("the tab and home-screen icons are linked and ship beside the page", /rel="icon" href="favicon\.ico"/.test(page) && /rel="apple-touch-icon" href="apple-icon\.png"/.test(page) && ["favicon.ico", "icon.png", "apple-icon.png"].every((f) => existsSync(join(out, f))));
+
+console.log("\n── the email notices: one when an incident opens, one when it is resolved, never one per check ──");
+const { noticesDue, baseline, noticeFor, rehearsalIncident, incidentKey, REHEARSAL_PART } = await import("./src/notify.mjs");
+const nrecs = (states) => states.map((st, i) => ({ at: new Date(Date.parse("2026-10-11T10:00:00Z") + i * 600000).toISOString(), components: { website: st } }));
+const openInc = deriveIncidents(nrecs(["operational", "major", "major", "major"]));
+const due1 = noticesDue(openInc, {});
+check("an open incident is due one problem notice", due1.length === 1 && due1[0].kind === "opened");
+const told = { [incidentKey(openInc[0])]: { opened: true } };
+check("RED: once told, more failed checks send nothing more", noticesDue(deriveIncidents(nrecs(["operational", "major", "major", "major", "major", "major"])), told).length === 0);
+const closed = deriveIncidents(nrecs(["operational", "major", "major", "operational", "operational"]));
+const due2 = noticesDue(closed, told);
+check("a resolved incident is due exactly one recovery notice", due2.length === 1 && due2[0].kind === "resolved");
+check("RED: one failed check opens nothing, so it emails nobody", noticesDue(deriveIncidents(nrecs(["operational", "major", "operational"])), {}).length === 0);
+check("RED: the first run records the past as told and sends nothing", noticesDue(closed, baseline(closed)).length === 0);
+const n = noticeFor("opened", openInc[0]);
+check("a notice names the part in customer words, carries the page and the one-click unsubscribe", /^The website is down$/.test(n.subject) && n.text.includes("https://status.unlimitless.ai/") && n.text.includes("{{{RESEND_UNSUBSCRIBE_URL}}}") && n.html.includes("{{{RESEND_UNSUBSCRIBE_URL}}}"));
+check("RED: no em dash in a notice", !/—/.test(n.subject + n.text));
+const [reh] = rehearsalIncident(new Date("2026-10-11T12:00:00Z"));
+const rn = noticeFor("opened", reh, { parts: [REHEARSAL_PART], rehearsal: true });
+check("a rehearsal plays one incident, opened then recovered, on a test part that is not on the page", !!reh && !!reh.resolvedAt && reh.component === "rehearsal" && !COMPONENTS.some((c) => c.key === "rehearsal"));
+check("RED: a rehearsal notice says so and names no real part", /^Rehearsal\. A test part is down$/.test(rn.subject) && /Nothing is wrong with Unl/.test(rn.text) && !COMPONENTS.some((c) => rn.text.includes(c.name)));
+
 console.log(fails ? `\nstatus tests: ${fails} failure(s)` : "\nstatus tests: clean");
 process.exit(fails ? 1 : 0);

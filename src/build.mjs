@@ -29,6 +29,15 @@ const past = JSON.parse(readFileSync(join(ROOT, "past-incidents.json"), "utf8"))
 
 /** Checks run every ten minutes; nothing for 45 means the page says so rather than showing old states as current. */
 const STALE_MS = 45 * 60 * 1000;
+/** Unl's confirm-by-email door (Unl brief fb0c0106). It sends a link; nobody joins the list until it is clicked. */
+const SUBSCRIBE_URL = "https://api.unlimitless.ai/public/status/subscribe";
+const SUBSCRIBE_SAYS = {
+  "check-email": "Check your email for a link to confirm.",
+  confirmed: "You are subscribed. Every email has a link to stop them.",
+  expired: "That link has expired. Ask again here.",
+  invalid: "That does not look like an email address.",
+  "try-again": "That did not work. Please try again.",
+};
 const last = records.at(-1);
 const stale = !last || now.getTime() - new Date(last.at).getTime() > STALE_MS;
 const today = now.toISOString().slice(0, 10);
@@ -71,12 +80,18 @@ const html = `<!doctype html>
 <title>Unl status</title>
 <meta name="description" content="Whether Unl is working right now, the last 90 days of each part, and every incident.">
 <link rel="alternate" type="application/atom+xml" title="Unl status updates" href="feed.xml">
+<link rel="icon" href="favicon.ico" sizes="16x16"><link rel="icon" href="icon.png" type="image/png" sizes="512x512"><link rel="apple-touch-icon" href="apple-icon.png" sizes="180x180">
 <style>${BRAND_CSS}
 .wrap{max-width:880px;margin:0 auto;padding:0 16px}
 header.top-bar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:26px 0 30px}
 .page-tag{font:400 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .told{margin:14px 0 0;color:var(--muted);font-size:14px}.told a{color:var(--unl-cyan)}
+.sub{margin:16px 0 0;border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;background:rgba(36,40,59,.45)}
+.sub label{display:block;color:var(--white);font:600 15px/1.4 var(--disp);margin-bottom:10px}
+.sub-row{display:flex;gap:8px;flex-wrap:wrap}.sub input{flex:1 1 220px;min-width:0;background:var(--panel);border:1px solid var(--line2);border-radius:10px;color:var(--white);font:400 15px/1.2 var(--body,inherit);padding:11px 12px}
+.sub button{flex:none;background:var(--unl-cyan);color:#04110D;border:0;border-radius:10px;font:700 14px/1 var(--mono);padding:12px 16px;cursor:pointer}
+.sub-msg{min-height:1.4em;margin-top:8px;color:var(--muted);font-size:14px}
 .top{border-radius:var(--radius);border:1px solid var(--line);padding:16px 20px;font:600 18px/1.4 var(--disp);margin:0 0 26px;display:flex;align-items:center;gap:12px}
 .top::before{content:'';flex:none;width:10px;height:10px;border-radius:50%;background:currentColor;box-shadow:0 0 12px currentColor}
 .top.operational{background:var(--ok-soft);color:var(--ok)}.top.degraded{background:var(--slow-soft);color:var(--slow)}
@@ -123,7 +138,21 @@ footer{border-top:1px solid var(--line);margin-top:56px;padding:34px 0 40px}
 ${parts.map((p) => `<div class="part"><div class="part-h"><b>${esc(p.name)}</b><span class="st ${p.state ?? "none"}">${p.state ? esc(STATES[p.state].label) : "Not yet checked"}</span></div>${barSvg(p.bars)}<div class="part-f"><span>90 days ago</span><span>${p.sofar.checks === 0 ? "No checks yet" : p.sofar.bad === 0 ? `${p.sofar.checks} checks so far, every one found it working` : `${p.sofar.checks} checks so far, ${p.sofar.bad} found a problem`}</span><span>Today</span></div></div>`).join("\n")}
 </section>
 <p class="note">${since ? `Our checks began on ${esc(longDate(since))}. Days before that have no bars, because nothing was checked then.` : "Our checks have not started yet, so no days are drawn."} ${last ? `Last checked ${esc(longDate(last.at))}, ${esc(hhmm(last.at))} UTC.` : ""}</p>
-<p class="told" id="told">To be told when a part stops working and when it recovers, follow the <a href="feed.xml">updates feed</a> in any feed reader. Agents can read the same truth from <a href="status.json">status.json</a>.</p>
+<form class="sub" id="sub" action="${SUBSCRIBE_URL}" method="post">
+<label for="sub-email">Get one email when a part stops working and one when it recovers</label>
+<div class="sub-row"><input id="sub-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com"><button type="submit">Subscribe</button></div>
+<p class="sub-msg" id="sub-msg" role="status" aria-live="polite"></p>
+</form>
+<script>
+// The box works as a plain form. With script on it stays on the page, and a link's return (?subscribe=) is said here.
+(function(){var f=document.getElementById("sub"),m=document.getElementById("sub-msg"),say=${JSON.stringify(SUBSCRIBE_SAYS)};
+var q=(location.search.match(/[?&]subscribe=([a-z-]+)/)||[])[1];if(q&&say[q])m.textContent=say[q];
+f.addEventListener("submit",function(e){e.preventDefault();m.textContent="Sending";
+fetch(f.action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:f.email.value})})
+.then(function(r){m.textContent=r.ok?say["check-email"]:(r.status===400?say["invalid"]:say["try-again"]);if(r.ok)f.email.value="";})
+.catch(function(){m.textContent=say["try-again"];});});})();
+</script>
+<p class="told" id="told">Every email has a link to stop them. You can also follow the <a href="feed.xml">updates feed</a> in any feed reader, and agents can read the same truth from <a href="status.json">status.json</a>.</p>
 <h2>Past incidents</h2>
 ${byDay.size ? [...byDay.entries()].map(([d, list]) => `<section class="day"><h3>${esc(longDate(d))}</h3>${list.map(incidentHtml).join("")}</section>`).join("\n") : `<section class="day"><p class="none">No incidents.</p></section>`}
 </div>
@@ -160,4 +189,6 @@ writeFileSync(join(outDir, "feed.xml"), feed);
 // The faces travel with the page: nothing is fetched from the site, or a font host, when the page is opened.
 mkdirSync(join(outDir, "fonts"), { recursive: true });
 for (const f of readdirSync(join(ROOT, "brand", "fonts"))) copyFileSync(join(ROOT, "brand", "fonts", f), join(outDir, "fonts", f));
+// The tab and home-screen icon, the same files the site serves (Unl brief fb0c0106, Neil 4ef85b00).
+for (const f of readdirSync(join(ROOT, "brand", "icons"))) copyFileSync(join(ROOT, "brand", "icons", f), join(outDir, f));
 console.log(`built: ${top.text}; ${records.length} check(s) since ${since ?? "never"}; ${incidents.length} incident(s)`);

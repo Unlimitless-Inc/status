@@ -53,6 +53,13 @@ jobs:
           fi
       - name: Check every part
         run: node src/probe.mjs status-data
+      # One email when an incident opens and one when it resolves (Unl brief fb0c0106). A failed send never stops the
+      # page: it shows red here, what was told is saved only after Resend accepts, and the next run tries again.
+      - name: Tell subscribers
+        continue-on-error: true
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: node src/notify.mjs status-data
       - name: Keep 100 days of history
         run: |
           node -e '
@@ -67,6 +74,7 @@ jobs:
           git config user.name "unl-status"
           git config user.email "status@unlimitless.ai"
           git add checks.jsonl
+          if [ -f notified.json ]; then git add notified.json; fi
           git commit -qm "status check $(date -u +%FT%TZ)"
           git push -q origin HEAD:status-data
       - name: Build the page

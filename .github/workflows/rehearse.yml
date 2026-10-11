@@ -1,0 +1,24 @@
+# rehearse — plays one incident on a test part, opened then recovered, to the "Status rehearsal" list only (Unl brief
+# fb0c0106). The test part is not on the page, the public list is never sent to, and what has been told is not touched.
+# Run by hand only.
+name: rehearse
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: rehearse
+  cancel-in-progress: false
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Send the rehearsal notices
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: node src/notify.mjs --rehearse
