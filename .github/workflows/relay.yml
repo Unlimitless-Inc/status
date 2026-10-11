@@ -1,0 +1,50 @@
+# relay — STARTS THE CHECKS EVERY TEN MINUTES WITHOUT LEANING ON GITHUB'S SCHEDULE.
+#
+# WHY. status.yml asks GitHub's scheduler for a run every ten minutes, and on a quiet repository GitHub runs it a few
+# times a day: 3 runs in 16 hours on 10 Oct 2026, and a 4-hour gap on 11 Oct. The page then rightly says its checks
+# have gone quiet, which is no use to anyone asking whether Unl is up.
+#
+# HOW. One long run starts the checks by hand every ten minutes, then hands on to the next relay before GitHub's
+# six-hour limit. Starting a workflow by hand is the one thing this repository's own token may do to another
+# workflow, so no credential is added. The concurrency group keeps exactly one relay alive: a second start waits
+# behind the first, and a newer one replaces any that is waiting.
+#
+# IF IT STOPS. The schedule below restarts it, and status.yml keeps its own schedule as a further trigger. Both lean
+# on GitHub's scheduler, so they are the fallback, never the cadence. The page still says when its checks are quiet.
+#
+# Off with the same switch as the checks: STATUS_PAGE_ARMED.
+name: relay
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "3 * * * *"
+
+concurrency:
+  group: relay
+  cancel-in-progress: false
+
+jobs:
+  relay:
+    if: vars.STATUS_PAGE_ARMED == 'true'
+    runs-on: ubuntu-latest
+    # The loop ends at 5h30 on its own, so the hand-on below always runs inside the 6h job limit.
+    timeout-minutes: 350
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Start the checks every ten minutes
+        run: |
+          end=$(( $(date +%s) + 330 * 60 ))
+          while [ "$(date +%s)" -lt "$end" ]; do
+            gh workflow run status.yml --ref main \
+              && echo "checks started $(date -u +%FT%TZ)" \
+              || echo "::warning::the checks could not be started at $(date -u +%FT%TZ); trying again in ten minutes"
+            sleep 600
+          done
+      - name: Hand on to the next relay
+        if: ${{ !cancelled() }}
+        run: gh workflow run relay.yml --ref main

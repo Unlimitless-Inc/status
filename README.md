@@ -4,6 +4,8 @@ The code behind [status.unlimitless.ai](https://status.unlimitless.ai): whether 
 
 It runs here, apart from Unl itself, so the page stays up when Unl is down. Every ten minutes a GitHub Action checks each part from outside (`src/probe.mjs`), adds one line to the history on the `status-data` branch, and rebuilds a static page (`src/build.mjs`) that Pages serves.
 
+The ten minutes do not rest on GitHub's scheduler, which runs a quiet repository's schedule only a few times a day. A relay (`.github/workflows/relay.yml`) starts the checks every ten minutes and hands on to the next relay before GitHub's six-hour limit. The schedules on both workflows are only there to restart it.
+
 The rules the page keeps, each tested in `test.mjs`:
 
 - Every state comes from a real check, never from a hand.
