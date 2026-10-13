@@ -1,5 +1,5 @@
-# rehearse — plays one incident on a test part, opened then recovered, to the "Status rehearsal" list only (Unl brief
-# fb0c0106). The test part is not on the page, the public list is never sent to, and what has been told is not touched.
+# rehearse — plays one incident on a test part, opened then recovered, to the "Status rehearsal" list only.
+# The test part is not on the page, the public list is never sent to, and what has been told is not touched.
 # Run by hand only.
 name: rehearse
 

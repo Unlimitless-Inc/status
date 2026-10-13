@@ -53,7 +53,7 @@ jobs:
           fi
       - name: Check every part
         run: node src/probe.mjs status-data
-      # One email when an incident opens and one when it resolves (Unl brief fb0c0106). A failed send never stops the
+      # One email when an incident opens and one when it resolves. A failed send never stops the
       # page: it shows red here, what was told is saved only after Resend accepts, and the next run tries again.
       - name: Tell subscribers
         continue-on-error: true
