@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// THE EMAIL NOTICES (Unl brief fb0c0106). After each check, the page's own incidents decide what is told: one email
+// THE EMAIL NOTICES. After each check, the page's own incidents decide what is told: one email
 // when an incident opens and one when it is resolved, never one per check. Subscribers are held by Resend in the
 // "Status updates" segment and opted in to the "Status updates" topic; they joined through Unl's confirm-by-email
 // door, and every email carries Resend's own one-click unsubscribe.

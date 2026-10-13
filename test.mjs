@@ -101,7 +101,7 @@ const prose = page.replace(/<style>[\s\S]*?<\/style>/, "").replace(/<script>[\s\
 check("RED: no colon or em dash in what a reader reads", !/[:—]/.test(prose), (prose.match(/.{0,30}[:—].{0,30}/) ?? [""])[0]);
 check("checks are counted, not turned into a percentage of days nobody checked", /3 checks so far, 2 found a problem/.test(page) && /3 checks so far, every one found it working/.test(page) && !/% of checks/.test(page));
 check("'Get updates' does not point at a raw feed from the header", !/Get updates/.test(page) && /href="feed\.xml">Updates feed</.test(page));
-check("RED: no visible page heading repeats the header's name; the banner comes first under the header (fb0c0106)", !/<h1(?![^>]*class="sr")/.test(page) && /<h1 class="sr">Unl status<\/h1>\s*<div class="top /.test(page) && /<title>Unl status<\/title>/.test(page));
+check("RED: no visible page heading repeats the header's name; the banner comes first under the header", !/<h1(?![^>]*class="sr")/.test(page) && /<h1 class="sr">Unl status<\/h1>\s*<div class="top /.test(page) && /<title>Unl status<\/title>/.test(page));
 check("the body tells a visitor how to be told of a change, with the feed and the machine file", /id="told"[^>]*>[^<]*<a href="feed\.xml">updates feed<\/a>/.test(page) && /href="status\.json"/.test(page));
 
 check("the page re-asks how old the last check is when it is opened, with the same window", /data-last="2026-10-09T10:20:00Z"/.test(page) && /Date\.now\(\)-Date\.parse\(l\)>2700000/.test(page) && /not reported recently/.test(page));
@@ -109,7 +109,7 @@ check("the page re-asks how old the last check is when it is opened, with the sa
 execFileSync("node", [join(HERE, "src", "build.mjs"), dir, out, "--now", "2026-10-09T12:00:00Z"]);
 check("RED: an hour and a half of silence turns the top line to 'not reported recently'", JSON.parse(readFileSync(join(out, "status.json"), "utf8")).stale === true);
 
-console.log("\n── the subscribe box and the tab icon (Unl brief fb0c0106) ──");
+console.log("\n── the subscribe box and the tab icon ──");
 check("the subscribe box posts to Unl's confirm-by-email door, and works as a plain form", /<form class="sub" id="sub" action="https:\/\/api\.unlimitless\.ai\/public\/status\/subscribe" method="post">/.test(page) && /name="email" type="email" required/.test(page));
 check("the page says every email can be stopped", /Every email has a link to stop them/.test(page));
 check("the tab and home-screen icons are linked and ship beside the page", /rel="icon" href="favicon\.ico"/.test(page) && /rel="apple-touch-icon" href="apple-icon\.png"/.test(page) && ["favicon.ico", "icon.png", "apple-icon.png"].every((f) => existsSync(join(out, f))));

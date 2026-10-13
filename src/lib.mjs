@@ -109,7 +109,7 @@ export function dayBars(records, key, today, days = 90) {
   const out = [];
   const t = new Date(`${today}T00:00:00Z`);
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(t.getTime() - i * 86400000).toISOString().slice(0, 10);
+    const d = new Date(t.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const v = byDay.get(d);
     out.push(v ? { day: d, state: v.worst, checks: v.checks, bad: v.bad } : { day: d, state: "none", checks: 0, bad: 0 });
   }

@@ -29,7 +29,7 @@ const past = JSON.parse(readFileSync(join(ROOT, "past-incidents.json"), "utf8"))
 
 /** Checks run every ten minutes; nothing for 45 means the page says so rather than showing old states as current. */
 const STALE_MS = 45 * 60 * 1000;
-/** Unl's confirm-by-email door (Unl brief fb0c0106). It sends a link; nobody joins the list until it is clicked. */
+/** Unl's confirm-by-email door. It sends a link; nobody joins the list until it is clicked. */
 const SUBSCRIBE_URL = "https://api.unlimitless.ai/public/status/subscribe";
 const SUBSCRIBE_SAYS = {
   "check-email": "Check your email for a link to confirm.",
@@ -189,6 +189,6 @@ writeFileSync(join(outDir, "feed.xml"), feed);
 // The faces travel with the page: nothing is fetched from the site, or a font host, when the page is opened.
 mkdirSync(join(outDir, "fonts"), { recursive: true });
 for (const f of readdirSync(join(ROOT, "brand", "fonts"))) copyFileSync(join(ROOT, "brand", "fonts", f), join(outDir, "fonts", f));
-// The tab and home-screen icon, the same files the site serves (Unl brief fb0c0106, Neil 4ef85b00).
+// The tab and home-screen icon, the same files the site serves.
 for (const f of readdirSync(join(ROOT, "brand", "icons"))) copyFileSync(join(ROOT, "brand", "icons", f), join(outDir, f));
 console.log(`built: ${top.text}; ${records.length} check(s) since ${since ?? "never"}; ${incidents.length} incident(s)`);
