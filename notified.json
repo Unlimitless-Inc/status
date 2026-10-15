@@ -1,4 +1,8 @@
 {
   "_why": "What the email notices have told, by incident. See src/notify.mjs.",
-  "told": {}
+  "told": {
+    "connect@2026-10-15T00:55:08.665Z": {
+      "opened": true
+    }
+  }
 }
