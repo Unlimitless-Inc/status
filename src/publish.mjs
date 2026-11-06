@@ -61,9 +61,10 @@ export async function publish({ env, fetchFn = fetch, wait = (ms) => new Promise
   const deployment = `${API}/repos/${repo}/pages/deployments`;
 
   // The host answers a version it already holds with that old deployment and calls it success. Asked first, so a
-  // repeat is refused here by name and never reported as a fresh page.
+  // repeat is refused here by name and never reported as a fresh page. Measured on 6 November: for a version it does
+  // not hold the host answers 200 with an empty state, not a 404, so only a real state counts as held.
   const held = await ask(fetchFn, `${deployment}/${version}`, { headers: gh }, "the look for an earlier deployment", { missingIsFine: true });
-  if (held) throw new Error(`publish: version ${version} was already published (${held.status ?? "state unknown"}), so sending it again would serve nothing new`);
+  if (held?.status) throw new Error(`publish: version ${version} was already published (${held.status}), so sending it again would serve nothing new`);
 
   const found = await ask(fetchFn, `${API}/repos/${repo}/actions/runs/${env.GITHUB_RUN_ID}/artifacts?name=github-pages&per_page=100`, { headers: gh }, "the list of this run's artifacts");
   const pages = (found.artifacts ?? []).filter((a) => a?.name === "github-pages" && !a.expired).sort((a, b) => b.id - a.id);

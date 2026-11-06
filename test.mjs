@@ -165,7 +165,8 @@ function host({ artifacts = [{ id: 7, name: "github-pages" }], states = ["deploy
     }
     if (url.includes("/pages/deployments/")) {
       const id = url.split("/").pop();
-      if (!made.has(id)) return answer(404, { message: "Not Found" });
+      // As measured: a version the host does not hold is a 200 with an empty state, never a 404.
+      if (!made.has(id)) return answer(200, { status: "" });
       if (held.includes(id)) return answer(200, { status: "succeed" });
       return answer(200, { status: states[Math.min(seen.polls++, states.length - 1)] });
     }
@@ -196,6 +197,9 @@ const fails_as = async (opts, env = runEnv()) => { try { await publish({ env, lo
   const msg = await fails_as({ fetchFn: repeat.fetchFn });
   check("RED: a version the host already holds is refused before anything is sent, never called a fresh success (the 5 November fault)", /was already published \(succeed\)/.test(msg) && repeat.seen.posts.length === 0, msg);
   const h = host({ states: ["deployment_queued", "deployment_failed"] });
+  const fresh = host();
+  await publish({ env: runEnv(), fetchFn: fresh.fetchFn, log: () => {}, ...quiet });
+  check("RED: a version the host does not hold (it answers with an empty state) is published, not mistaken for a repeat", fresh.seen.posts.length === 1);
   check("RED: a deployment the host could not make is a failure, said by name", /could not deploy the page \(deployment_failed\)/.test(await fails_as({ fetchFn: h.fetchFn })));
   const stuck = host({ states: ["deployment_queued"] });
   const slow = await fails_as({ fetchFn: stuck.fetchFn, patience: 3000 });
