@@ -15,11 +15,6 @@ on:
   schedule:
     - cron: "7,17,27,37,47,57 * * * *"
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Leave empty. For a publish test only: the build version to send."
-        required: false
-        default: ""
   push:
     branches: [main]
 
@@ -44,6 +39,9 @@ jobs:
     timeout-minutes: 8
     permissions:
       contents: write
+    outputs:
+      # The commit this run added to the history, set only once it is saved: the version this run publishes under.
+      data_sha: ${{ steps.save.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -72,7 +70,9 @@ jobs:
             const lines=fs.readFileSync(f,"utf8").split("\n").filter(Boolean).filter(l=>JSON.parse(l).at>=cut);
             fs.writeFileSync(f,lines.join("\n")+"\n");'
       - name: Save the history
-        # A push race with an overlapping run is retried on the next run rather than failing the check.
+        id: save
+        # A push race with an overlapping run is retried on the next run rather than failing the check. A run whose
+        # history was not saved names no commit, so it publishes nothing and the next run does.
         continue-on-error: true
         working-directory: status-data
         run: |
@@ -82,6 +82,7 @@ jobs:
           if [ -f notified.json ]; then git add notified.json; fi
           git commit -qm "status check $(date -u +%FT%TZ)"
           git push -q origin HEAD:status-data
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Build the page
         env:
           STATUS_BANNED_WORDS: ${{ vars.STATUS_BANNED_WORDS }}
@@ -91,11 +92,12 @@ jobs:
         with:
           path: site
 
-  # EVERY PUBLISH IS A DEPLOYMENT OF ITS OWN. The stock deploy step sends the commit as the deployment's version, and
-  # this repository's commit changes a few times a year while the page is rebuilt every ten minutes. From 5 November
-  # 2026, 17:50 UTC, the host answered each repeat with the deployment it already had: every run said success and the
-  # page people saw stayed that afternoon's copy for over twelve hours. src/publish.mjs sends a version that belongs
-  # to one run and waits until the host says that deployment is live, so a page that stops updating fails here by name.
+  # EVERY PUBLISH IS A DEPLOYMENT OF ITS OWN. The stock deploy step sends the commit the workflow ran from as the
+  # deployment's version, and that commit changes a few times a year while the page is rebuilt every ten minutes. From
+  # 5 November 2026, 17:50 UTC, the host answered each repeat with the deployment it already had: every run said
+  # success and the page people saw stayed that afternoon's copy for over twelve hours. src/publish.mjs publishes
+  # under the commit this run added to the history, which is new for every check, refuses a version the host already
+  # holds, and waits until the host says the deployment is live, so a page that stops updating fails here by name.
   publish:
     needs: check
     if: vars.STATUS_PAGE_PUBLISH == 'true'
@@ -116,5 +118,5 @@ jobs:
       - name: Publish this run's page as a deployment of its own
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          PUBLISH_VERSION: ${{ inputs.version }}
+          PUBLISH_VERSION: ${{ needs.check.outputs.data_sha }}
         run: node src/publish.mjs
