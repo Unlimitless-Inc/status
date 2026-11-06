@@ -135,5 +135,66 @@ const rn = noticeFor("opened", reh, { parts: [REHEARSAL_PART], rehearsal: true }
 check("a rehearsal plays one incident, opened then recovered, on a test part that is not on the page", !!reh && !!reh.resolvedAt && reh.component === "rehearsal" && !COMPONENTS.some((c) => c.key === "rehearsal"));
 check("RED: a rehearsal notice says so and names no real part", /^Rehearsal\. A test part is down$/.test(rn.subject) && /Nothing is wrong with Unl/.test(rn.text) && !COMPONENTS.some((c) => rn.text.includes(c.name)));
 
+console.log("\n── every publish is a deployment of its own, and is green only when the host says it is live ──");
+// 5 November 2026: the checks ran every ten minutes and every publish said success, while the page people saw stayed
+// one afternoon's copy for over twelve hours. Each publish had sent the commit as its version, so it asked for a
+// deployment that already existed. The stand-in below answers as the host does, and remembers what it was sent.
+const { buildVersion, publish } = await import("./src/publish.mjs");
+const runEnv = (over = {}) => ({
+  GITHUB_REPOSITORY: "o/r", GITHUB_TOKEN: "job-token-PLANTED-0123456789", GITHUB_SHA: "c0ffee", GITHUB_RUN_ID: "101", GITHUB_RUN_ATTEMPT: "1",
+  ACTIONS_ID_TOKEN_REQUEST_URL: "https://sign-in.example/token", ACTIONS_ID_TOKEN_REQUEST_TOKEN: "ask-token-PLANTED-0123456789", ...over,
+});
+const SIGN_IN = "sign-in-PLANTED-abcdefghijklmnopqrstuvwxyz";
+function host({ artifacts = [{ id: 7, name: "github-pages" }], states = ["deployment_in_progress", "succeed"], refuse = null } = {}) {
+  const seen = { posts: [], asked: [], polls: 0 };
+  const answer = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+  const fetchFn = async (url, options = {}) => {
+    seen.asked.push({ url, headers: options.headers ?? {} });
+    if (url.includes("/actions/runs/")) return answer(200, { artifacts });
+    if (url.startsWith("https://sign-in.example/")) return answer(200, { value: SIGN_IN });
+    if (url.endsWith("/pages/deployments") && options.method === "POST") {
+      if (refuse) return answer(refuse, { message: "Resource not accessible by integration" });
+      const sent = JSON.parse(options.body); seen.posts.push(sent);
+      return answer(200, { id: sent.pages_build_version, page_url: "https://status.example/" });
+    }
+    if (url.includes("/pages/deployments/")) return answer(200, { status: states[Math.min(seen.polls++, states.length - 1)] });
+    return answer(404, { message: "Not Found" });
+  };
+  return { fetchFn, seen };
+}
+const quiet = { wait: async () => {}, every: 1000 };
+check("RED: two runs of the same commit never share a version", buildVersion(runEnv({ GITHUB_RUN_ID: "101" })) !== buildVersion(runEnv({ GITHUB_RUN_ID: "102" })));
+check("RED: a re-run of the same run is another publish and gets its own version", buildVersion(runEnv({ GITHUB_RUN_ATTEMPT: "1" })) !== buildVersion(runEnv({ GITHUB_RUN_ATTEMPT: "2" })));
+let noName = false; try { buildVersion(runEnv({ GITHUB_RUN_ID: "" })); } catch { noName = true; }
+check("RED: a version is never made up from part of what names it", noName);
+{
+  const h = host(), said = [];
+  const r = await publish({ env: runEnv(), fetchFn: h.fetchFn, log: (l) => said.push(l), ...quiet });
+  check("the page this run built is sent with this run's own version", h.seen.posts.length === 1 && h.seen.posts[0].artifact_id === 7 && h.seen.posts[0].pages_build_version === "c0ffee-101-1" && r.version === "c0ffee-101-1");
+  check("it is green only after the host says that deployment is live", h.seen.polls === 2 && said.some((l) => /succeed/.test(l)));
+  const everything = said.join("\n") + JSON.stringify(r);
+  check("RED: neither the sign-in token nor the job's tokens are ever printed", ![SIGN_IN, "job-token-PLANTED-0123456789", "ask-token-PLANTED-0123456789"].some((t) => everything.includes(t)) && h.seen.posts[0].oidc_token === SIGN_IN);
+  check("the job's own token is what asks, and only of the host", h.seen.asked.filter((a) => a.url.startsWith("https://api.github.com/")).every((a) => a.headers.Authorization === "Bearer job-token-PLANTED-0123456789")
+    && h.seen.asked.filter((a) => !a.url.startsWith("https://api.github.com/")).every((a) => a.headers.Authorization === "Bearer ask-token-PLANTED-0123456789"));
+}
+const fails_as = async (opts, env = runEnv()) => { try { await publish({ env, log: () => {}, ...quiet, ...opts }); return ""; } catch (e) { return e.message; } };
+{
+  const h = host({ states: ["deployment_in_progress", "deployment_failed"] });
+  check("RED: a deployment the host could not make is a failure, said by name", /could not deploy the page \(deployment_failed\)/.test(await fails_as({ fetchFn: h.fetchFn })));
+  const stuck = host({ states: ["deployment_in_progress"] });
+  const msg = await fails_as({ fetchFn: stuck.fetchFn, patience: 3000 });
+  check("RED: a deployment that never goes live runs out of patience and fails, never a green tick", /did not report deployment c0ffee-101-1 live/.test(msg) && stuck.seen.polls >= 3, msg);
+  const none = host({ artifacts: [] });
+  check("RED: a run that built no page sends nothing and says so", /built no page to publish/.test(await fails_as({ fetchFn: none.fetchFn })) && none.seen.posts.length === 0);
+  const refused = host({ refuse: 403 });
+  const said = await fails_as({ fetchFn: refused.fetchFn });
+  check("RED: a refusal from the host fails with its own reason, and carries no token", /the deployment was refused \(HTTP 403, Resource not accessible/.test(said) && !said.includes(SIGN_IN), said);
+  check("RED: a job with no sign-in token to ask for fails before sending anything", /not given a sign-in token/.test(await fails_as({ fetchFn: h.fetchFn }, runEnv({ ACTIONS_ID_TOKEN_REQUEST_URL: "" }))));
+}
+const flow = readFileSync(join(HERE, ".github", "workflows", "status.yml"), "utf8");
+const publishJob = flow.slice(flow.indexOf("\n  publish:"));
+check("the publish job runs this file, with leave to deploy pages and to ask for a sign-in token", /run: node src\/publish\.mjs/.test(publishJob) && /pages: write/.test(publishJob) && /id-token: write/.test(publishJob) && /name: github-pages/.test(publishJob));
+check("RED: the stock deploy step, which sends the commit as the version, is not what publishes", !/uses: actions\/deploy-pages/.test(flow));
+
 console.log(fails ? `\nstatus tests: ${fails} failure(s)` : "\nstatus tests: clean");
 process.exit(fails ? 1 : 0);
