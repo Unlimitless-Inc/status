@@ -15,6 +15,11 @@ on:
   schedule:
     - cron: "7,17,27,37,47,57 * * * *"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Leave empty. For a publish test only: the build version to send."
+        required: false
+        default: ""
   push:
     branches: [main]
 
@@ -111,4 +116,5 @@ jobs:
       - name: Publish this run's page as a deployment of its own
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          PUBLISH_VERSION: ${{ inputs.version }}
         run: node src/publish.mjs

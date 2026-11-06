@@ -26,6 +26,8 @@ const FAILED = {
 
 /** A version no other publish shares. A re-run of the same run is another publish, so the attempt is part of it. */
 export function buildVersion(env) {
+  // A hand-started run may name the version it sends, to learn what the host accepts. Empty everywhere else.
+  if (env.PUBLISH_VERSION) return String(env.PUBLISH_VERSION).trim();
   const { GITHUB_SHA: sha, GITHUB_RUN_ID: run, GITHUB_RUN_ATTEMPT: attempt } = env;
   if (!sha || !run || !attempt) throw new Error("publish: the commit, the run and its attempt are all needed to name a version");
   return `${sha}-${run}-${attempt}`;
