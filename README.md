@@ -15,6 +15,7 @@ The rules the page keeps, each tested in `test.mjs`:
 - Parts are named in customer words only.
 - The page wears the site's own look (`src/brand.mjs` says where each value came from) and carries it with it: the fonts sit in `brand/fonts` with their licences, so nothing is loaded from the site when the page is opened.
 - The page is built when the checks run, so it asks again how old the last check is when someone opens it.
+- Every publish is a deployment of its own, and it is green only once that deployment is the one being served (`src/publish.mjs`). A page that stops updating fails by name instead of reporting success.
 
 Subscribers get one email when an incident opens and one when it is resolved (`src/notify.mjs`, after each check). They join through Unl's confirm-by-email door, the list is held by Resend, and every email carries a one-click unsubscribe. What has been told is kept in `notified.json` on `status-data`, so nothing is sent twice. The `rehearse` workflow plays one incident on a test part to a rehearsal list only.
 

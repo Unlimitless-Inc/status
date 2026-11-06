@@ -86,16 +86,29 @@ jobs:
         with:
           path: site
 
+  # EVERY PUBLISH IS A DEPLOYMENT OF ITS OWN. The stock deploy step sends the commit as the deployment's version, and
+  # this repository's commit changes a few times a year while the page is rebuilt every ten minutes. From 5 November
+  # 2026, 17:50 UTC, the host answered each repeat with the deployment it already had: every run said success and the
+  # page people saw stayed that afternoon's copy for over twelve hours. src/publish.mjs sends a version that belongs
+  # to one run and waits until the host says that deployment is live, so a page that stops updating fails here by name.
   publish:
     needs: check
     if: vars.STATUS_PAGE_PUBLISH == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     permissions:
+      contents: read
+      actions: read
       pages: write
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: https://status.unlimitless.ai/
     steps:
-      - id: deploy
-        uses: actions/deploy-pages@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Publish this run's page as a deployment of its own
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node src/publish.mjs
